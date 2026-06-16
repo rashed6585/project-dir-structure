@@ -21,8 +21,8 @@ mkdir -p "$PROJECT_DIR"
 mkdir -p "$PROJECT_DIR"/{docs,checkpoints,knowledge-base}
 mkdir -p "$PROJECT_DIR"/tmp/input-prompts
 mkdir -p "$PROJECT_DIR"/{backend,frontend,orchestrator}
-mkdir -p "$PROJECT_DIR"/backend/{src,notebooks,tests,scripts,configs,logs,api,features}
-mkdir -p "$PROJECT_DIR"/backend/src/{models,utils,evaluation}
+mkdir -p "$PROJECT_DIR"/backend/{src,notebooks,tests,scripts,configs,logs,serving-api}
+mkdir -p "$PROJECT_DIR"/backend/src/{models,utils,evaluation,features}
 mkdir -p "$PROJECT_DIR"/backend/src/data-pipeline/{sql,sqoop,dags,spark-node}
 mkdir -p "$PROJECT_DIR"/backend/src/deployment/{kubernetes,inference}
 mkdir -p "$PROJECT_DIR"/backend/data/{raw,processed,sample}
@@ -32,6 +32,8 @@ mkdir -p "$PROJECT_DIR"/frontend/src/{components,pages,hooks,utils,assets,styles
 mkdir -p "$PROJECT_DIR"/.github/workflows
 mkdir -p "$PROJECT_DIR"/orchestrator/{config,logs,prompts/system,prompts/tasks,prompts/templates}
 mkdir -p "$PROJECT_DIR"/orchestrator/src/{agents/specialists,workflows,guardrails,knowledge/documents,memory,tools,llm,utils}
+mkdir -p "$PROJECT_DIR"/shared/{models,interfaces}
+mkdir -p "$PROJECT_DIR"/tests/integration
 
 # Create root-level files
 touch "$PROJECT_DIR"/LICENSE
@@ -77,174 +79,193 @@ This project contains the structure for an AI LLM pipeline including data handli
 
 ## Folder Structure
 
+\`\`\`
 $PROJECT_DIR/
-├── LICENSE
-├── .gitignore
-├── README.md
-├── CLAUDE.md
-├── docker-compose.yml
+├── LICENSE                             # Open-source license file
+├── .gitignore                          # Root gitignore covering all sub-projects (Global, Backend, Frontend, Orchestrator)
+├── README.md                           # Project overview, folder guide, and quick-start instructions
+├── CLAUDE.md                           # Claude Code project context, conventions, and package management commands
+├── docker-compose.yml                  # Unified multi-service orchestration (backend, orchestrator, frontend, PostgreSQL+pgvector, Redis)
+├── justfile                            # Root task runner: seed DB, clear logs, lint/test across all services simultaneously
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                      # CI — lint & test on push / PR
-│       └── cd.yml                      # CD — build & push on production branch
+│       ├── ci.yml                      # CI — lint & test on push / PR (backend, orchestrator, frontend)
+│       └── cd.yml                      # CD — build & push Docker images on production branch
 ├── .claude/
-│   ├── settings.json                   # Shared permissions and hooks (team-committed)
-│   ├── settings.local.json             # Personal local overrides (gitignored)
-│   ├── commands/                       # Custom slash commands
-│   ├── agents/                         # Custom subagent definitions
-│   ├── skills/                         # Reusable prompt skills
-│   ├── rules/                          # Project coding conventions
-│   └── hooks/                          # Shell scripts triggered by Claude Code hooks
-├── knowledge-base/                     # Static domain knowledge and reference docs
-├── orchestrator/                       # LLM orchestration layer
-│   ├── .env.example
-│   ├── .gitignore
-│   ├── README.md
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── Dockerfile
-│   ├── logs/                           # Orchestrator log files (gitignored)
+│   ├── settings.json                   # Shared Claude Code permissions and hooks (team-committed)
+│   ├── settings.local.json             # Personal local overrides — not committed (gitignored)
+│   ├── commands/                       # Custom slash commands available inside Claude Code sessions
+│   │   └── run-tests.md                # /run-tests — executes full backend + frontend test suites
+│   ├── agents/                         # Custom subagent definitions for specialized AI tasks
+│   │   └── data-analyst.md             # Subagent: dataset exploration, statistics, and chart generation
+│   ├── skills/                         # Reusable prompt skills invokable across sessions
+│   │   └── analyze-data.md             # Skill: load, describe, and flag quality issues in a dataset
+│   ├── rules/                          # Project-specific coding conventions Claude Code will follow
+│   │   └── coding-conventions.md       # Style guide covering Python, React, and Orchestrator patterns
+│   └── hooks/                          # Shell scripts triggered by Claude Code lifecycle events
+│       └── PostToolUse.sh              # Logs every Bash tool call with timestamp to backend/logs/
+├── shared/                             # Cross-stack communication contracts — single source of truth for API shapes
+│   ├── models/                         # Pydantic schemas shared between backend and orchestrator (FastAPI request/response bodies)
+│   │   └── __init__.py
+│   └── interfaces/                     # TypeScript interfaces shared with the frontend (mirrors Pydantic models)
+│       └── index.ts
+├── knowledge-base/                     # Static domain knowledge and reference documents used for RAG ingestion
+├── tests/
+│   └── integration/                    # E2E tests — spin up full docker-compose stack and verify cross-service flows
+│       ├── __init__.py
+│       └── test_e2e_flow.py            # Verifies Frontend -> Orchestrator -> Backend health and request routing
+├── orchestrator/                       # LLM orchestration layer — multi-agent coordination, memory, and guardrails
+│   ├── .env.example                    # Orchestrator env var template — commit this, copy to .env with real values
+│   ├── README.md                       # Orchestrator quick-start, architecture overview, and module guide
+│   ├── pyproject.toml                  # Python dependencies: FastAPI, anthropic, redis, faiss-cpu, psycopg2
+│   ├── uv.lock                         # Locked dependency versions — always commit for reproducible installs
+│   ├── Dockerfile                      # python:3.12-alpine container for the orchestrator service
+│   ├── logs/                           # Orchestrator runtime log files (gitignored; .gitkeep tracks the folder)
 │   ├── config/
 │   │   ├── __init__.py
-│   │   └── settings.py                 # App-wide settings and env validation (Pydantic)
+│   │   └── settings.py                 # App-wide settings loaded from environment — Pydantic BaseSettings with validation
 │   ├── prompts/
 │   │   ├── system/
-│   │   │   └── SYSTEM.md               # Core agent persona, behavior identity, & ReAct rules
+│   │   │   └── SYSTEM.md               # Core agent persona, behavioral identity, and ReAct reasoning rules
 │   │   ├── tasks/
-│   │   │   └── task_execution.xml      # Structural schemas, rules, & task-specific constraints
+│   │   │   └── task_execution.xml      # Task structural schemas, execution rules, and step-level constraints
 │   │   └── templates/
-│   │       └── tool_calling.json       # Few-shot examples & reusable structural prompt templates
+│   │       └── tool_calling.json       # Few-shot examples and reusable JSON templates for tool invocations
 │   └── src/
 │       ├── __init__.py
-│       ├── main.py                     # Application entry point (FastAPI)
+│       ├── main.py                     # FastAPI application entry point — registers routes and starts the ASGI server
 │       ├── agents/
 │       │   ├── __init__.py
-│       │   ├── base.py                 # Abstract Base Agent class
-│       │   ├── orchestrator.py         # Central Router / Dynamic LLM Coordinator
+│       │   ├── base.py                 # Abstract BaseAgent — defines the interface all agents must implement
+│       │   ├── orchestrator.py         # Central Router — dynamic LLM coordinator that delegates to specialists
+│       │   ├── registry.py             # Specialist registry — dynamically imports agents so __init__.py stays clean
 │       │   └── specialists/
 │       │       ├── __init__.py
-│       │       └── data_analyst.py
+│       │       └── data_analyst.py     # Specialist agent: data exploration, statistics, and analytical reasoning
 │       ├── workflows/
 │       │   ├── __init__.py
-│       │   ├── base.py
-│       │   └── sequential_flow.py
+│       │   ├── base.py                 # Base workflow class defining the step execution contract
+│       │   └── sequential_flow.py      # Sequential step-by-step task execution workflow
 │       ├── guardrails/
 │       │   ├── __init__.py
-│       │   ├── input_moderation.py     # Prompt injection, jailbreak, and PII filtering
-│       │   └── output_verifier.py      # JSON/XML syntax & hallucination checks
+│       │   ├── input_moderation.py     # Filters prompt injection, jailbreaks, and PII from user input
+│       │   └── output_verifier.py      # Validates JSON/XML structure and flags potential hallucinations
 │       ├── knowledge/
 │       │   ├── __init__.py
-│       │   ├── store.py
-│       │   └── documents/
+│       │   ├── store.py                # Knowledge retrieval interface — wraps vector_db for RAG queries
+│       │   └── documents/              # Ingested source documents and FAISS index files (Docker volume mount)
 │       ├── memory/
 │       │   ├── __init__.py
-│       │   ├── base.py
-│       │   ├── short_term.py           # Ephemeral session history via Redis
-│       │   ├── long_term.py            # Persistent relational state (PostgreSQL)
-│       │   ├── vector_db.py            # Semantic storage (FAISS / pgvector)
-│       │   ├── cache.py                # Key-value cache for LLM hits
-│       │   └── embeddings.py           # Vectorization engine wrappers
+│       │   ├── base.py                 # Abstract Memory interface — all memory backends implement this contract
+│       │   ├── short_term.py           # Ephemeral session history via Redis — TTL-scoped per conversation
+│       │   ├── long_term.py            # Persistent relational state via PostgreSQL — survives container restarts
+│       │   ├── vector_db.py            # Semantic storage via FAISS (disk-persisted via volume) or pgvector
+│       │   ├── cache.py                # Key-value cache for LLM response deduplication (Redis-backed)
+│       │   └── embeddings.py           # Vectorization engine wrappers — converts text to embedding vectors
 │       ├── tools/
 │       │   ├── __init__.py
-│       │   ├── base.py                 # Tool registration decorator and schema parser
-│       │   ├── web_search.py
-│       │   ├── calculator.py
-│       │   ├── file_reader.py
-│       │   └── custom_tools.py
+│       │   ├── base.py                 # Tool registration decorator and JSON schema auto-parser
+│       │   ├── web_search.py           # Web search capability via Tavily API
+│       │   ├── calculator.py           # Safe arithmetic expression evaluator
+│       │   ├── file_reader.py          # Reads documents from the knowledge-base/ directory
+│       │   └── custom_tools.py         # Project-specific tool implementations
 │       ├── llm/
 │       │   ├── __init__.py
-│       │   ├── client.py               # Single-point gateway for underlying models
-│       │   └── token_counter.py        # Sliding context window analyzer & cost tracker
+│       │   ├── client.py               # Single-point LLM gateway — abstracts underlying model providers (Anthropic)
+│       │   └── token_counter.py        # Sliding context window analyzer and per-call cost tracker
 │       └── utils/
 │           ├── __init__.py
-│           ├── logger.py
-│           ├── helpers.py
-│           └── timers.py               # Execution benchmarking and latency tracking
-├── backend/                            # Backend — Python / AI-LLM
-│   ├── pyproject.toml                  # Python dependencies and tool config (uv)
-│   ├── .env.example                    # Backend env var template (commit this)
-│   ├── Dockerfile                      # python:3.11-alpine container
-│   ├── .dockerignore
-│   ├── api/                            # API layer (FastAPI routes)
-│   ├── features/                       # Feature engineering
-│   │   └── feature_engineering.py
+│           ├── logger.py               # Structured logging configuration (JSON output for production)
+│           ├── helpers.py              # General-purpose utility functions
+│           └── timers.py               # Execution benchmarking and request latency tracking
+├── backend/                            # Backend — Python / AI-LLM pipeline and data processing
+│   ├── pyproject.toml                  # Python dependencies and tool configuration managed with uv
+│   ├── .env.example                    # Backend env var template — commit this, copy to .env with real values
+│   ├── Dockerfile                      # python:3.11-alpine container for the backend service
+│   ├── .dockerignore                   # Excludes .venv, data/, notebooks/ and large artifacts from Docker build
+│   ├── serving-api/                    # FastAPI route handlers — one router file per resource domain
+│   │   └── __init__.py
 │   ├── notebooks/
-│   │   ├── data_exploration.ipynb
-│   │   └── model_training.ipynb
+│   │   ├── data_exploration.ipynb      # Interactive EDA — profiling, distributions, and correlations
+│   │   └── model_training.ipynb        # Model training experiments — hyperparameter search and evaluation
 │   ├── src/
 │   │   ├── __init__.py
-│   │   ├── data-pipeline/
+│   │   ├── features/                   # Feature engineering modules — transformation and selection logic
 │   │   │   ├── __init__.py
-│   │   │   ├── data_loader.py
-│   │   │   ├── data_preprocessor.py
-│   │   │   ├── sql/                    # SQL scripts hive/exadata
-│   │   │   ├── sqoop/                  # Sqoop import/export jobs
-│   │   │   ├── dags/                   # Airflow DAG definitions
-│   │   │   └── spark-node/             # Spark job configs and scripts
+│   │   │   └── feature_engineering.py  # Core feature pipeline: encoding, scaling, and derived feature creation
+│   │   ├── data-pipeline/              # Ingestion, transformation, and orchestration layer
+│   │   │   ├── __init__.py
+│   │   │   ├── data_loader.py          # All data loading goes through here — single entry point for raw sources
+│   │   │   ├── data_preprocessor.py    # Cleaning, normalisation, type casting, and train/val/test splitting
+│   │   │   ├── sql/                    # SQL scripts for Hive / Exadata query execution
+│   │   │   ├── sqoop/                  # Sqoop import/export job definitions for HDFS ingestion
+│   │   │   ├── dags/                   # Airflow DAG definitions for pipeline scheduling and orchestration
+│   │   │   └── spark-node/             # Spark job configurations and PySpark transformation scripts
 │   │   ├── models/
 │   │   │   ├── __init__.py
-│   │   │   ├── base_model.py
-│   │   │   └── fine_tune.py
+│   │   │   ├── base_model.py           # Shared model base class, registry, and serialization helpers
+│   │   │   └── fine_tune.py            # Fine-tuning training loop, checkpoint saving, and early stopping
 │   │   ├── utils/
 │   │   │   ├── __init__.py
-│   │   │   ├── helpers.py              # File and general helper utilities
-│   │   │   ├── logger.py
-│   │   │   └── tracing.py             # Distributed tracing utilities
+│   │   │   ├── helpers.py              # File I/O and general-purpose helper utilities
+│   │   │   ├── logger.py               # Structured logger — always use this, never use print()
+│   │   │   └── tracing.py              # Distributed tracing instrumentation (OpenTelemetry compatible)
 │   │   ├── evaluation/
 │   │   │   ├── __init__.py
-│   │   │   ├── metrics.py
-│   │   │   └── evaluate.py
+│   │   │   ├── metrics.py              # Evaluation metric definitions: BLEU, ROUGE, F1, perplexity, etc.
+│   │   │   └── evaluate.py             # Evaluation harness — runs metrics over model outputs and reports results
 │   │   └── deployment/
 │   │       ├── __init__.py
-│   │       ├── kubernetes/             # K8s manifests and helpers
-│   │       └── inference/              # Inference serving configs
+│   │       ├── kubernetes/             # Kubernetes manifests: Deployments, Services, ConfigMaps, HPA
+│   │       └── inference/              # Inference serving configs for Triton / TorchServe
 │   ├── tests/
-│   │   ├── test_data_loader.py
-│   │   ├── test_fine_tune.py
-│   │   └── test_metrics.py
-│   ├── data/                           # Dataset storage (contents gitignored)
-│   │   ├── raw/
-│   │   ├── processed/
-│   │   └── sample/
+│   │   ├── test_data_loader.py         # Unit tests for data ingestion and loader contract
+│   │   ├── test_fine_tune.py           # Unit tests for fine-tuning loop and checkpoint logic
+│   │   └── test_metrics.py             # Unit tests for evaluation metric correctness
+│   ├── data/                           # Dataset storage — directory structure tracked, file contents gitignored
+│   │   ├── raw/                        # Unmodified source data as received from upstream
+│   │   ├── processed/                  # Cleaned and transformed data ready for model training
+│   │   └── sample/                     # Small representative sample for fast local development and testing
 │   ├── scripts/
-│   │   ├── train.py
-│   │   └── predict.py
+│   │   ├── train.py                    # Training entry point — called by CI pipelines or run manually
+│   │   └── predict.py                  # Inference entry point for generating batch predictions
 │   ├── configs/
-│   │   ├── default_config.yaml
-│   │   ├── dev_config.yaml
-│   │   └── prod_config.yaml
-│   └── logs/                           # Backend log files (gitignored)
-├── frontend/                           # Frontend — Node 20 / React / Tailwind CSS
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── .nvmrc
-│   ├── .env.example
-│   ├── Dockerfile                      # node:20-alpine multi-stage container
-│   ├── .dockerignore
+│   │   ├── default_config.yaml         # Base configuration — shared defaults for all environments
+│   │   ├── dev_config.yaml             # Development overrides (relaxed limits, local endpoints)
+│   │   └── prod_config.yaml            # Production overrides (strict limits, remote endpoints)
+│   └── logs/                           # Backend runtime log files (gitignored; .gitkeep tracks the folder)
+├── frontend/                           # Frontend — Node 20 / React / Tailwind CSS SPA
+│   ├── package.json                    # Node.js dependencies and npm lifecycle scripts
+│   ├── vite.config.js                  # Vite bundler configuration and Vitest test setup
+│   ├── tailwind.config.js              # Tailwind CSS content paths and theme extension points
+│   ├── postcss.config.js               # PostCSS plugins: Tailwind CSS and Autoprefixer
+│   ├── .nvmrc                          # Pins Node version to 20 for nvm users — run 'nvm use' before installing
+│   ├── .env.example                    # Frontend env var template — commit this, copy to .env with real values
+│   ├── Dockerfile                      # node:20-alpine multi-stage build: builder stage + serve-only runner stage
+│   ├── .dockerignore                   # Excludes node_modules, dist/, coverage/ from Docker build context
 │   ├── public/
-│   │   ├── index.html
-│   │   └── favicon.ico
+│   │   ├── index.html                  # HTML shell loaded by Vite — contains the #root mount point
+│   │   └── favicon.ico                 # Browser tab icon
 │   ├── src/
-│   │   ├── index.jsx
-│   │   ├── App.jsx
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── utils/
-│   │   ├── assets/
+│   │   ├── index.jsx                   # React DOM entry point — mounts <App /> to #root
+│   │   ├── App.jsx                     # Root component — defines global layout, theme providers, and router
+│   │   ├── components/                 # Reusable UI components — one component per file, no page logic here
+│   │   ├── pages/                      # Page-level components that are the target of a route — one per route
+│   │   ├── hooks/                      # Custom React hooks — all prefixed with 'use' (e.g. useAuth, useData)
+│   │   ├── utils/                      # Pure helper functions, constants, and type converters
+│   │   ├── assets/                     # Static assets: images, SVGs, fonts, and icons
 │   │   └── styles/
-│   │       └── index.css
+│   │       └── index.css               # Tailwind @tailwind directives and global base style overrides
 │   ├── tests/
-│   │   └── App.test.jsx
-│   └── logs/                           # Frontend log files (gitignored)
+│   │   └── App.test.jsx                # Component tests using Vitest + React Testing Library
+│   └── logs/                           # Frontend runtime log files (gitignored; .gitkeep tracks the folder)
 ├── docs/
-│   ├── index.md
-│   └── api_reference.md
-├── checkpoints/                        # Saved model checkpoints (gitignored)
-└── tmp/                                # Temporary scratch files (gitignored)
-    └── input-prompts/
+│   ├── index.md                        # Documentation home — project overview and navigation guide
+│   └── api_reference.md                # REST API reference — endpoints, request/response schemas, examples
+├── checkpoints/                        # Saved model training checkpoints (gitignored; .gitkeep tracks the folder)
+└── tmp/                                # Temporary scratch files — never committed (fully gitignored)
+    └── input-prompts/                  # Temporary prompt drafts, experiments, and LLM input test files
+\`\`\`
 EOL
 
 # Create backend source code files
@@ -254,8 +275,8 @@ touch "$PROJECT_DIR"/backend/src/__init__.py \
       "$PROJECT_DIR"/backend/src/utils/{__init__.py,helpers.py,logger.py,tracing.py} \
       "$PROJECT_DIR"/backend/src/evaluation/{__init__.py,metrics.py,evaluate.py} \
       "$PROJECT_DIR"/backend/src/deployment/__init__.py \
-      "$PROJECT_DIR"/backend/features/{__init__.py,feature_engineering.py} \
-      "$PROJECT_DIR"/backend/api/__init__.py
+      "$PROJECT_DIR"/backend/src/features/{__init__.py,feature_engineering.py} \
+      "$PROJECT_DIR"/backend/serving-api/__init__.py
 
 # Create test files
 touch "$PROJECT_DIR"/backend/tests/{test_data_loader.py,test_fine_tune.py,test_metrics.py}
@@ -306,17 +327,59 @@ touch "$PROJECT_DIR/backend/src/deployment/kubernetes/.gitkeep"
 touch "$PROJECT_DIR/backend/src/deployment/inference/.gitkeep"
 touch "$PROJECT_DIR/backend/src/data-pipeline/dags/.gitkeep"
 touch "$PROJECT_DIR/backend/src/data-pipeline/spark-node/.gitkeep"
-touch "$PROJECT_DIR/backend/api/.gitkeep"
+touch "$PROJECT_DIR/backend/src/data-pipeline/sql/.gitkeep"
+touch "$PROJECT_DIR/backend/src/data-pipeline/sqoop/.gitkeep"
+touch "$PROJECT_DIR/backend/serving-api/.gitkeep"
+touch "$PROJECT_DIR/frontend/src/components/.gitkeep"
+touch "$PROJECT_DIR/frontend/src/pages/.gitkeep"
+touch "$PROJECT_DIR/frontend/src/hooks/.gitkeep"
+touch "$PROJECT_DIR/frontend/src/utils/.gitkeep"
+touch "$PROJECT_DIR/frontend/src/assets/.gitkeep"
 touch "$PROJECT_DIR/frontend/logs/.gitkeep"
 touch "$PROJECT_DIR/tmp/.gitkeep"
 touch "$PROJECT_DIR/tmp/input-prompts/.gitkeep"
 touch "$PROJECT_DIR/knowledge-base/.gitkeep"
+touch "$PROJECT_DIR/orchestrator/src/knowledge/documents/.gitkeep"
 touch "$PROJECT_DIR/orchestrator/logs/.gitkeep"
 
 # create .gitignore
 cat > "$PROJECT_DIR/.gitignore" << 'EOF'
-# ── Python ───────────────────────────────────────────────────────────────────
-# Byte-compiled / optimized / DLL files
+# --- Global ---
+
+# OS artefacts
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+*.sublime-*
+#.idea/
+
+# Environment files — each developer keeps their own; never commit .env
+.env
+.env.local
+.env.*.local
+
+# Temporary and scratch files
+/tmp/*
+!/tmp/.gitkeep
+!/tmp/input-prompts/
+
+# Model checkpoints — gitignore contents but keep the folder tracked via .gitkeep
+/checkpoints/*
+!/checkpoints/.gitkeep
+
+# DB folder
+*/db/*
+
+# --- Backend ---
+
+# Python byte-compiled / optimised / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -373,17 +436,16 @@ cover/
 *.mo
 *.pot
 
-# Django stuff:
-*.log
+# Django
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-# Flask stuff:
+# Flask
 instance/
 .webassets-cache
 
-# Scrapy stuff:
+# Scrapy
 .scrapy
 
 # Sphinx documentation
@@ -400,20 +462,10 @@ target/
 profile_default/
 ipython_config.py
 
-# pyenv
-# .python-version
-
-# pipenv
-#Pipfile.lock
-
-# UV
+# uv — commit uv.lock for reproducibility; uncomment to ignore
 #uv.lock
 
-# poetry
-#poetry.lock
-
 # pdm
-#pdm.lock
 .pdm.toml
 .pdm-python
 .pdm-build/
@@ -421,15 +473,14 @@ ipython_config.py
 # PEP 582
 __pypackages__/
 
-# Celery stuff
+# Celery
 celerybeat-schedule
 celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
 
-# Environments
-.env
+# Virtual environments
 .venv
 env/
 venv/
@@ -437,22 +488,15 @@ ENV/
 env.bak/
 venv.bak/
 
-# Spyder project settings
+# Spyder
 .spyderproject
 .spyproject
 
-# Rope project settings
+# Rope
 .ropeproject
 
-# mkdocs documentation
+# mkdocs
 /site
-
-# Ignore compiled Python bytecode files
-*.pyc
-
-# Ignore editor-specific files
-.vscode/
-*.sublime-*
 
 # mypy
 .mypy_cache/
@@ -465,40 +509,24 @@ dmypy.json
 # pytype static type analyzer
 .pytype/
 
+# Claude
+.claude/
+CLAUDE.md
+
 # Cython debug symbols
 cython_debug/
 
-# PyCharm
-#.idea/
-
-# Ruff stuff:
+# Ruff
 .ruff_cache/
 
-# PyPI configuration file
+# PyPI
 .pypirc
 
-# ── Project folders ──────────────────────────────────────────────────────────
-# Log files
+# Backend project-specific log and data paths
 /backend/logs/*
 !/backend/logs/.gitkeep
-/frontend/logs/*
-!/frontend/logs/.gitkeep
-/orchestrator/logs/*
-!/orchestrator/logs/.gitkeep
 
-# Temporary scratch files
-/tmp/*
-!/tmp/.gitkeep
-!/tmp/input-prompts/
-
-# DB folder
-*/db/*
-
-# Model checkpoints
-/checkpoints/*
-!/checkpoints/.gitkeep
-
-# ── Data files — track directory structure only, not actual data ─────────────
+# Data files — track directory structure only, not actual data contents
 /backend/data/raw/*
 !/backend/data/raw/.gitkeep
 /backend/data/processed/*
@@ -506,19 +534,15 @@ cython_debug/
 /backend/data/sample/*
 !/backend/data/sample/.gitkeep
 
-# ── Frontend (Node.js / React) ───────────────────────────────────────────────
-# Installed packages — never commit, restore with: npm install / yarn
+# --- Frontend ---
+
+# Installed packages — restore with: npm install
 frontend/node_modules/
 
 # Production build output
 frontend/build/
 frontend/dist/
 frontend/.vite/
-
-# Environment files — contain secrets, each dev has their own
-frontend/.env
-frontend/.env.local
-frontend/.env.*.local
 
 # Test coverage reports
 frontend/coverage/
@@ -531,7 +555,30 @@ frontend/yarn-error.log*
 frontend/.pnp/
 frontend/.pnp.js
 
-# ── Claude Code ───────────────────────────────────────────────────────────────
+# Frontend logs
+/frontend/logs/*
+!/frontend/logs/.gitkeep
+
+# --- Orchestrator ---
+
+# Orchestrator virtual environment and compiled files
+orchestrator/.venv/
+orchestrator/**/__pycache__/
+orchestrator/**/*.py[cod]
+orchestrator/**/*.egg-info/
+orchestrator/.pytest_cache/
+orchestrator/.ruff_cache/
+
+# Orchestrator logs
+/orchestrator/logs/*
+!/orchestrator/logs/.gitkeep
+
+# FAISS index files — persisted to Docker volume; never commit the index binary
+orchestrator/src/knowledge/documents/*.index
+orchestrator/src/knowledge/documents/*.npy
+
+# --- Claude Code ---
+
 # Claude Code local overrides (personal settings, not team-shared)
 .claude/settings.local.json
 EOF
@@ -754,6 +801,7 @@ services:
       - app-network
     volumes:
       - ./orchestrator/logs:/app/logs
+      - faiss_data:/app/src/knowledge/documents
 
   frontend:
     build:
@@ -769,7 +817,7 @@ services:
       - app-network
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: postgres_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -809,6 +857,7 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  faiss_data:
 EOF
 
 # create .github/workflows/ci.yml
@@ -894,6 +943,93 @@ jobs:
           context: ./frontend
           push: true
           tags: ${{ secrets.REGISTRY_URL }}/frontend:${{ github.sha }}
+EOF
+
+# create justfile — root task runner
+cat > "$PROJECT_DIR/justfile" << 'EOF'
+# justfile — root task runner for the AI LLM Project
+# Install just: https://github.com/casey/just
+# Usage: just <recipe>
+
+# Default: list all available recipes
+default:
+    @just --list
+
+# ── Database seeding ──────────────────────────────────────────────────────────
+# Seed the PostgreSQL database with initial schema and sample data
+seed-db:
+    docker compose exec db psql -U postgres -d appdb -c "SELECT 'seed placeholder — add your seed SQL here';"
+
+# ── Log management ───────────────────────────────────────────────────────────
+# Clear all log files across backend, frontend, and orchestrator
+clear-logs:
+    find backend/logs -type f -name "*.log" -delete
+    find frontend/logs -type f -name "*.log" -delete
+    find orchestrator/logs -type f -name "*.log" -delete
+    @echo "All logs cleared."
+
+# ── Linting ──────────────────────────────────────────────────────────────────
+# Lint backend Python code with ruff
+lint-backend:
+    cd backend && uv run ruff check .
+
+# Lint orchestrator Python code with ruff
+lint-orchestrator:
+    cd orchestrator && uv run ruff check .
+
+# Lint frontend JavaScript/TypeScript code with ESLint
+lint-frontend:
+    cd frontend && npm run lint
+
+# Lint all projects simultaneously
+lint-all: lint-backend lint-orchestrator lint-frontend
+
+# ── Testing ──────────────────────────────────────────────────────────────────
+# Run backend unit tests
+test-backend:
+    cd backend && uv run pytest tests/ -v --tb=short
+
+# Run orchestrator unit tests
+test-orchestrator:
+    cd orchestrator && uv run pytest tests/ -v --tb=short
+
+# Run frontend unit tests
+test-frontend:
+    cd frontend && npm test
+
+# Run all unit tests across all projects
+test-all: test-backend test-orchestrator test-frontend
+
+# Run end-to-end integration tests against the full docker-compose stack
+test-integration:
+    docker compose up -d
+    sleep 5
+    uv run pytest tests/integration/ -v --tb=short
+    docker compose down
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+# Build and start all services
+up:
+    docker compose up --build -d
+
+# Stop all services and remove volumes
+down:
+    docker compose down -v
+
+# Rebuild a single service (usage: just rebuild backend)
+rebuild service:
+    docker compose up --build -d {{service}}
+
+# Stream logs for a service (usage: just logs orchestrator)
+logs service:
+    docker compose logs -f {{service}}
+
+# ── Setup ────────────────────────────────────────────────────────────────────
+# Install all dependencies across backend, orchestrator, and frontend
+install:
+    cd backend && uv sync
+    cd orchestrator && uv sync
+    cd frontend && npm install
 EOF
 
 # create frontend/package.json
@@ -1065,8 +1201,8 @@ cat > "$PROJECT_DIR/.claude/rules/coding-conventions.md" << 'EOF'
 - Log using the project logger in `backend/src/utils/logger.py`, never `print()`
 - Use `backend/src/utils/tracing.py` for distributed tracing instrumentation
 - General file/text helpers live in `backend/src/utils/helpers.py`
-- Feature engineering logic belongs in `backend/features/feature_engineering.py`
-- API routes live in `backend/api/`; one router file per resource
+- Feature engineering logic belongs in `backend/src/features/feature_engineering.py`
+- API routes live in `backend/serving-api/`; one router file per resource
 - Airflow DAGs go in `backend/src/data-pipeline/dags/`
 - Spark jobs go in `backend/src/data-pipeline/spark-node/`
 - Configuration is read from `backend/configs/`; never hard-code paths or credentials
@@ -1141,17 +1277,6 @@ EOF
 # ── Orchestrator files ────────────────────────────────────────────────────────
 
 touch "$PROJECT_DIR/orchestrator/uv.lock"
-
-cat > "$PROJECT_DIR/orchestrator/.gitignore" << 'EOF'
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-.env
-.pytest_cache/
-.ruff_cache/
-*.egg-info/
-EOF
 
 cat > "$PROJECT_DIR/orchestrator/.env.example" << 'EOF'
 # Orchestrator environment variables — copy to .env and fill in real values.
@@ -1386,10 +1511,281 @@ touch "$PROJECT_DIR"/orchestrator/src/agents/specialists/{__init__.py,data_analy
 touch "$PROJECT_DIR"/orchestrator/src/workflows/{__init__.py,base.py,sequential_flow.py}
 touch "$PROJECT_DIR"/orchestrator/src/guardrails/{__init__.py,input_moderation.py,output_verifier.py}
 touch "$PROJECT_DIR"/orchestrator/src/knowledge/{__init__.py,store.py}
-touch "$PROJECT_DIR"/orchestrator/src/memory/{__init__.py,base.py,short_term.py,long_term.py,vector_db.py,cache.py,embeddings.py}
+touch "$PROJECT_DIR"/orchestrator/src/memory/{__init__.py,base.py,cache.py,embeddings.py}
 touch "$PROJECT_DIR"/orchestrator/src/tools/{__init__.py,base.py,web_search.py,calculator.py,file_reader.py,custom_tools.py}
 touch "$PROJECT_DIR"/orchestrator/src/llm/{__init__.py,client.py,token_counter.py}
 touch "$PROJECT_DIR"/orchestrator/src/utils/{__init__.py,logger.py,helpers.py,timers.py}
+touch "$PROJECT_DIR"/shared/models/__init__.py
+touch "$PROJECT_DIR"/shared/interfaces/index.ts
+touch "$PROJECT_DIR"/tests/integration/__init__.py
+
+# create orchestrator/src/agents/registry.py — dynamic specialist registry
+cat > "$PROJECT_DIR/orchestrator/src/agents/registry.py" << 'EOF'
+import importlib
+import pkgutil
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from orchestrator.src.agents.base import BaseAgent
+
+_REGISTRY: dict[str, type] = {}
+
+
+def register(name: str):
+    """Decorator that registers a specialist agent class under a given name."""
+    def decorator(cls):
+        _REGISTRY[name] = cls
+        return cls
+    return decorator
+
+
+def _load_specialists() -> None:
+    """Auto-import all modules in specialists/ so @register decorators fire."""
+    specialists_path = Path(__file__).parent / "specialists"
+    package = f"{__package__}.specialists"
+    for _, module_name, _ in pkgutil.iter_modules([str(specialists_path)]):
+        importlib.import_module(f"{package}.{module_name}")
+
+
+def get(name: str):
+    if name not in _REGISTRY:
+        _load_specialists()
+    if name not in _REGISTRY:
+        raise KeyError(f"No specialist registered as '{name}'. Available: {list(_REGISTRY)}")
+    return _REGISTRY[name]
+
+
+def all_specialists() -> dict[str, type]:
+    _load_specialists()
+    return dict(_REGISTRY)
+EOF
+
+# create orchestrator/src/memory/short_term.py — Redis-backed ephemeral session history
+cat > "$PROJECT_DIR/orchestrator/src/memory/short_term.py" << 'EOF'
+import json
+from typing import Any
+
+import redis.asyncio as redis
+
+from config.settings import settings
+
+
+class ShortTermMemory:
+    """Ephemeral session history backed by Redis. Each session key expires via TTL."""
+
+    def __init__(self, session_id: str, ttl: int = 3600) -> None:
+        self._client: redis.Redis = redis.from_url(settings.redis_url, decode_responses=True)
+        self._key = f"session:{session_id}:history"
+        self._ttl = ttl
+
+    async def append(self, role: str, content: str) -> None:
+        message = json.dumps({"role": role, "content": content})
+        async with self._client.pipeline() as pipe:
+            pipe.rpush(self._key, message)
+            pipe.expire(self._key, self._ttl)
+            await pipe.execute()
+
+    async def get_history(self) -> list[dict[str, Any]]:
+        raw = await self._client.lrange(self._key, 0, -1)
+        return [json.loads(m) for m in raw]
+
+    async def clear(self) -> None:
+        await self._client.delete(self._key)
+EOF
+
+# create orchestrator/src/memory/long_term.py — PostgreSQL-backed persistent state
+cat > "$PROJECT_DIR/orchestrator/src/memory/long_term.py" << 'EOF'
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, String, Text, create_engine
+from sqlalchemy.orm import DeclarativeBase, Session
+
+from config.settings import settings
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class ConversationRecord(Base):
+    __tablename__ = "conversation_records"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, index=True, nullable=False)
+    role = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class LongTermMemory:
+    """Persistent relational state backed by PostgreSQL. Survives container restarts."""
+
+    def __init__(self) -> None:
+        self._engine = create_engine(settings.database_url)
+        Base.metadata.create_all(self._engine)
+
+    def save(self, record_id: str, session_id: str, role: str, content: str) -> None:
+        with Session(self._engine) as session:
+            record = ConversationRecord(
+                id=record_id,
+                session_id=session_id,
+                role=role,
+                content=content,
+            )
+            session.add(record)
+            session.commit()
+
+    def get_session_history(self, session_id: str) -> list[dict]:
+        with Session(self._engine) as session:
+            records = (
+                session.query(ConversationRecord)
+                .filter_by(session_id=session_id)
+                .order_by(ConversationRecord.created_at)
+                .all()
+            )
+            return [{"role": r.role, "content": r.content} for r in records]
+EOF
+
+# create orchestrator/src/memory/vector_db.py — FAISS semantic storage (disk-persisted)
+# FAISS saves its index to local disk files; the Docker volume mount at
+# /app/src/knowledge/documents ensures the index survives container restarts.
+cat > "$PROJECT_DIR/orchestrator/src/memory/vector_db.py" << 'EOF'
+from pathlib import Path
+
+import faiss
+import numpy as np
+
+from config.settings import settings
+
+
+class FAISSVectorDB:
+    """Semantic storage via FAISS persisted to disk via a Docker volume mount.
+
+    Index files live at settings.vector_db_path which maps to the faiss_data
+    named volume in docker-compose.yml so the index is never wiped on restart.
+    """
+
+    _INDEX_FILE = "faiss.index"
+    _TEXTS_FILE = "faiss_texts.npy"
+
+    def __init__(self, dim: int = 1536) -> None:
+        self._path = Path(settings.vector_db_path)
+        self._path.mkdir(parents=True, exist_ok=True)
+        self._index_path = self._path / self._INDEX_FILE
+        self._texts_path = self._path / self._TEXTS_FILE
+
+        if self._index_path.exists():
+            self._index = faiss.read_index(str(self._index_path))
+            self._texts: list[str] = np.load(
+                str(self._texts_path), allow_pickle=True
+            ).tolist()
+        else:
+            self._index = faiss.IndexFlatL2(dim)
+            self._texts = []
+
+    def add(self, vectors: np.ndarray, texts: list[str]) -> None:
+        self._index.add(vectors.astype("float32"))
+        self._texts.extend(texts)
+        self._persist()
+
+    def search(self, query: np.ndarray, k: int = 5) -> list[str]:
+        _, indices = self._index.search(query.astype("float32").reshape(1, -1), k)
+        return [self._texts[i] for i in indices[0] if i < len(self._texts)]
+
+    def _persist(self) -> None:
+        faiss.write_index(self._index, str(self._index_path))
+        np.save(str(self._texts_path), np.array(self._texts, dtype=object))
+EOF
+
+# create shared/models/__init__.py — Pydantic schemas shared between backend and orchestrator
+cat > "$PROJECT_DIR/shared/models/__init__.py" << 'EOF'
+from pydantic import BaseModel
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    tool_calls_used: list[str] = []
+EOF
+
+# create shared/interfaces/index.ts — TypeScript interfaces matching Pydantic schemas
+cat > "$PROJECT_DIR/shared/interfaces/index.ts" << 'EOF'
+export interface ChatMessage {
+  role: string;
+  content: string;
+}
+
+export interface ChatRequest {
+  session_id: string;
+  message: string;
+}
+
+export interface ChatResponse {
+  session_id: string;
+  reply: string;
+  tool_calls_used: string[];
+}
+EOF
+
+# create tests/integration/test_e2e_flow.py — E2E tests for the full docker-compose stack
+cat > "$PROJECT_DIR/tests/integration/test_e2e_flow.py" << 'EOF'
+"""Integration tests — spin up the full docker-compose stack and verify end-to-end flows.
+
+Run with:
+    just test-integration
+    # or manually:
+    docker compose up -d && sleep 5 && pytest tests/integration/ -v
+"""
+
+import time
+
+import httpx
+import pytest
+
+BACKEND_URL = "http://localhost:8000"
+ORCHESTRATOR_URL = "http://localhost:8001"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def wait_for_services():
+    """Poll each service health endpoint until ready or timeout."""
+    services = [(BACKEND_URL, "/health"), (ORCHESTRATOR_URL, "/health")]
+    timeout = 60
+    for base_url, path in services:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                resp = httpx.get(f"{base_url}{path}", timeout=2)
+                if resp.status_code == 200:
+                    break
+            except httpx.RequestError:
+                time.sleep(2)
+        else:
+            pytest.fail(f"Service at {base_url}{path} did not become healthy within {timeout}s")
+
+
+def test_backend_health():
+    resp = httpx.get(f"{BACKEND_URL}/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+def test_orchestrator_health():
+    resp = httpx.get(f"{ORCHESTRATOR_URL}/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+EOF
 
 # create CLAUDE.md
 cat > "$PROJECT_DIR/CLAUDE.md" << 'EOF'
@@ -1443,10 +1839,23 @@ docker compose up --build orchestrator # Rebuild and start orchestrator only
 docker compose down -v                 # Stop all services and remove volumes
 ```
 
+## Task Runner (justfile)
+Install [just](https://github.com/casey/just), then from the project root:
+```bash
+just install           # Install all deps (backend + orchestrator + frontend)
+just lint-all          # Lint all three projects simultaneously
+just test-all          # Run all unit tests across all projects
+just test-integration  # Run E2E tests against the full docker-compose stack
+just seed-db           # Seed the PostgreSQL database
+just clear-logs        # Clear all log files across all services
+just up                # Build and start all services
+just down              # Stop all services and remove volumes
+```
+
 ## Project Structure
 - `backend/src/` — Python source code (data-pipeline, models, utils, evaluation, deployment)
-- `backend/api/` — FastAPI route handlers
-- `backend/features/` — Feature engineering modules
+- `backend/serving-api/` — FastAPI route handlers — one router file per resource domain
+- `backend/src/features/` — Feature engineering modules
 - `backend/notebooks/` — Jupyter notebooks for exploration
 - `backend/src/data-pipeline/dags/` — Airflow DAG definitions
 - `backend/src/data-pipeline/spark-node/` — Spark job configs and scripts
@@ -1458,17 +1867,25 @@ docker compose down -v                 # Stop all services and remove volumes
 - `frontend/src/` — React source (components, pages, hooks, utils, assets, styles)
 - `frontend/src/styles/index.css` — Tailwind CSS directives and global styles
 - `orchestrator/src/` — Multi-agent orchestration layer
+- `orchestrator/src/agents/registry.py` — Dynamic specialist registry (auto-imports via pkgutil)
+- `orchestrator/src/memory/short_term.py` — Redis-backed ephemeral session history
+- `orchestrator/src/memory/long_term.py` — PostgreSQL-backed persistent state
+- `orchestrator/src/memory/vector_db.py` — FAISS semantic storage (disk-persisted via Docker volume)
 - `orchestrator/prompts/` — System prompts, task schemas, and few-shot templates
+- `shared/models/` — Pydantic schemas shared between backend and orchestrator
+- `shared/interfaces/` — TypeScript interfaces shared with the frontend
 - `knowledge-base/` — Static domain knowledge and reference documents
+- `tests/integration/` — E2E tests that spin up the full docker-compose stack
 - `backend/tests/` — Backend unit tests (pytest)
 - `backend/scripts/` — Standalone train/predict scripts
 - `frontend/logs/` — Frontend log files (not committed)
-- `checkpoints/` — Saved model checkpoints (not committed)
+- `checkpoints/` — Saved model checkpoints (not committed; .gitkeep preserves the folder)
 - `tmp/` — Temporary scratch files (not committed)
 - `tmp/input-prompts/` — Temporary prompt drafts and experiments
 
 ## Key Files
-- `docker-compose.yml` — Orchestrates backend, frontend, and PostgreSQL services
+- `docker-compose.yml` — Orchestrates all services (PostgreSQL+pgvector, Redis, backend, orchestrator, frontend)
+- `justfile` — Root task runner: lint, test, seed DB, clear logs
 - `backend/pyproject.toml` — Python dependencies and tool configuration
 - `backend/configs/default_config.yaml` — Default runtime configuration
 - `backend/configs/prod_config.yaml` — Production overrides
@@ -1476,6 +1893,8 @@ docker compose down -v                 # Stop all services and remove volumes
 - `frontend/vite.config.js` — Vite bundler + Vitest configuration
 - `orchestrator/pyproject.toml` — Orchestrator dependencies
 - `orchestrator/config/settings.py` — Pydantic settings with env validation
+- `shared/models/__init__.py` — Pydantic schemas that define the cross-stack API contract
+- `shared/interfaces/index.ts` — TypeScript interfaces mirroring the Pydantic schemas
 - `.github/workflows/ci.yml` — CI pipeline (lint + test on push/PR)
 - `.github/workflows/cd.yml` — CD pipeline (build + push on production-v1.0)
 EOF
