@@ -21,16 +21,17 @@ mkdir -p "$PROJECT_DIR"
 mkdir -p "$PROJECT_DIR"/{docs,checkpoints,knowledge-base}
 mkdir -p "$PROJECT_DIR"/tmp/input-prompts
 mkdir -p "$PROJECT_DIR"/{backend,frontend,orchestrator}
-mkdir -p "$PROJECT_DIR"/backend/{src,notebooks,tests,scripts,configs,logs,serving-api}
+mkdir -p "$PROJECT_DIR"/backend/{src,notebooks,tests,scripts,configs,serving-api}
+mkdir -p "$PROJECT_DIR"/logs/{backend,frontend,orchestrator}
 mkdir -p "$PROJECT_DIR"/backend/src/{models,utils,evaluation,features}
 mkdir -p "$PROJECT_DIR"/backend/src/data-pipeline/{sql,sqoop,dags,spark-node}
 mkdir -p "$PROJECT_DIR"/backend/src/deployment/{kubernetes,inference}
 mkdir -p "$PROJECT_DIR"/backend/data/{raw,processed,sample}
 mkdir -p "$PROJECT_DIR"/.claude/{commands,agents,skills,rules,hooks}
-mkdir -p "$PROJECT_DIR"/frontend/{public,tests,logs}
+mkdir -p "$PROJECT_DIR"/frontend/{public,tests}
 mkdir -p "$PROJECT_DIR"/frontend/src/{components,pages,hooks,utils,assets,styles}
 mkdir -p "$PROJECT_DIR"/.github/workflows
-mkdir -p "$PROJECT_DIR"/orchestrator/{config,logs,prompts/system,prompts/tasks,prompts/templates}
+mkdir -p "$PROJECT_DIR"/orchestrator/{config,prompts/system,prompts/tasks,prompts/templates}
 mkdir -p "$PROJECT_DIR"/orchestrator/src/{agents/specialists,workflows,guardrails,knowledge/documents,memory,tools,llm,utils}
 mkdir -p "$PROJECT_DIR"/shared/{models,interfaces}
 mkdir -p "$PROJECT_DIR"/tests/integration
@@ -103,7 +104,8 @@ $PROJECT_DIR/
 │   ├── rules/                          # Project-specific coding conventions Claude Code will follow
 │   │   └── coding-conventions.md       # Style guide covering Python, React, and Orchestrator patterns
 │   └── hooks/                          # Shell scripts triggered by Claude Code lifecycle events
-│       └── PostToolUse.sh              # Logs every Bash tool call with timestamp to backend/logs/
+│       ├── PostToolUse.sh              # Logs every Bash tool call with timestamp to logs/backend/
+│       └── ruff-format.sh              # Auto-formats .py files with ruff after every Write/Edit/MultiEdit
 ├── shared/                             # Cross-stack communication contracts — single source of truth for API shapes
 │   ├── models/                         # Pydantic schemas shared between backend and orchestrator (FastAPI request/response bodies)
 │   │   └── __init__.py
@@ -120,7 +122,6 @@ $PROJECT_DIR/
 │   ├── pyproject.toml                  # Python dependencies: FastAPI, anthropic, redis, faiss-cpu, psycopg2
 │   ├── uv.lock                         # Locked dependency versions — always commit for reproducible installs
 │   ├── Dockerfile                      # python:3.12-alpine container for the orchestrator service
-│   ├── logs/                           # Orchestrator runtime log files (gitignored; .gitkeep tracks the folder)
 │   ├── config/
 │   │   ├── __init__.py
 │   │   └── settings.py                 # App-wide settings loaded from environment — Pydantic BaseSettings with validation
@@ -175,7 +176,7 @@ $PROJECT_DIR/
 │       │   └── token_counter.py        # Sliding context window analyzer and per-call cost tracker
 │       └── utils/
 │           ├── __init__.py
-│           ├── logger.py               # Structured logging configuration (JSON output for production)
+│           ├── logger.py               # get_logger() — file + stdout handler writing to logs/orchestrator/YYYYMMDD/
 │           ├── helpers.py              # General-purpose utility functions
 │           └── timers.py               # Execution benchmarking and request latency tracking
 ├── backend/                            # Backend — Python / AI-LLM pipeline and data processing
@@ -208,7 +209,7 @@ $PROJECT_DIR/
 │   │   ├── utils/
 │   │   │   ├── __init__.py
 │   │   │   ├── helpers.py              # File I/O and general-purpose helper utilities
-│   │   │   ├── logger.py               # Structured logger — always use this, never use print()
+│   │   │   ├── logger.py               # get_logger() — file + stdout handler writing to logs/backend/YYYYMMDD/
 │   │   │   └── tracing.py              # Distributed tracing instrumentation (OpenTelemetry compatible)
 │   │   ├── evaluation/
 │   │   │   ├── __init__.py
@@ -229,11 +230,10 @@ $PROJECT_DIR/
 │   ├── scripts/
 │   │   ├── train.py                    # Training entry point — called by CI pipelines or run manually
 │   │   └── predict.py                  # Inference entry point for generating batch predictions
-│   ├── configs/
-│   │   ├── default_config.yaml         # Base configuration — shared defaults for all environments
-│   │   ├── dev_config.yaml             # Development overrides (relaxed limits, local endpoints)
-│   │   └── prod_config.yaml            # Production overrides (strict limits, remote endpoints)
-│   └── logs/                           # Backend runtime log files (gitignored; .gitkeep tracks the folder)
+│   └── configs/
+│       ├── default_config.yaml         # Base configuration — shared defaults for all environments
+│       ├── dev_config.yaml             # Development overrides (relaxed limits, local endpoints)
+│       └── prod_config.yaml            # Production overrides (strict limits, remote endpoints)
 ├── frontend/                           # Frontend — Node 20 / React / Tailwind CSS SPA
 │   ├── package.json                    # Node.js dependencies and npm lifecycle scripts
 │   ├── vite.config.js                  # Vite bundler configuration and Vitest test setup
@@ -256,9 +256,12 @@ $PROJECT_DIR/
 │   │   ├── assets/                     # Static assets: images, SVGs, fonts, and icons
 │   │   └── styles/
 │   │       └── index.css               # Tailwind @tailwind directives and global base style overrides
-│   ├── tests/
-│   │   └── App.test.jsx                # Component tests using Vitest + React Testing Library
-│   └── logs/                           # Frontend runtime log files (gitignored; .gitkeep tracks the folder)
+│   └── tests/
+│       └── App.test.jsx                # Component tests using Vitest + React Testing Library
+├── logs/                               # Centralised runtime logs — mounted into containers via docker-compose volumes
+│   ├── backend/                        # Backend log files (gitignored; .gitkeep tracks the folder)
+│   ├── frontend/                       # Frontend log files (gitignored; .gitkeep tracks the folder)
+│   └── orchestrator/                   # Orchestrator log files (gitignored; .gitkeep tracks the folder)
 ├── docs/
 │   ├── index.md                        # Documentation home — project overview and navigation guide
 │   └── api_reference.md                # REST API reference — endpoints, request/response schemas, examples
@@ -277,6 +280,52 @@ touch "$PROJECT_DIR"/backend/src/__init__.py \
       "$PROJECT_DIR"/backend/src/deployment/__init__.py \
       "$PROJECT_DIR"/backend/src/features/{__init__.py,feature_engineering.py} \
       "$PROJECT_DIR"/backend/serving-api/__init__.py
+
+# create backend/src/utils/logger.py
+cat > "$PROJECT_DIR/backend/src/utils/logger.py" << 'EOF'
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import pytz
+
+_LOGS_DIR = Path(__file__).parents[3] / "logs" / "backend"
+
+
+def get_logger(name: str, log_file: str, log_level: int = logging.DEBUG) -> logging.Logger:
+    """Return a named logger writing to logs/backend/YYYYMMDD/<log_file>.log and stdout."""
+    logger = logging.getLogger(name)
+    if logger.hasHandlers():
+        return logger
+
+    logger.setLevel(log_level)
+
+    tz = pytz.timezone("Asia/Dhaka")
+
+    def _converter(*args):
+        return datetime.now(tz).timetuple()
+
+    today = datetime.now(tz).strftime("%Y%m%d")
+    log_dir = _LOGS_DIR / today
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    fh = logging.FileHandler(log_dir / f"{log_file}.log")
+    fh.setLevel(logging.DEBUG)
+    fmt_fh = logging.Formatter("[ %(asctime)s ] %(name)-15s %(levelname)-8s %(message)s")
+    fmt_fh.converter = _converter
+    fh.setFormatter(fmt_fh)
+    logger.addHandler(fh)
+
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    fmt_ch = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+    fmt_ch.converter = _converter
+    ch.setFormatter(fmt_ch)
+    logger.addHandler(ch)
+
+    return logger
+EOF
 
 # Create test files
 touch "$PROJECT_DIR"/backend/tests/{test_data_loader.py,test_fine_tune.py,test_metrics.py}
@@ -322,7 +371,7 @@ touch "$PROJECT_DIR/checkpoints/.gitkeep"
 touch "$PROJECT_DIR/backend/data/processed/.gitkeep"
 touch "$PROJECT_DIR/backend/data/raw/.gitkeep"
 touch "$PROJECT_DIR/backend/data/sample/.gitkeep"
-touch "$PROJECT_DIR/backend/logs/.gitkeep"
+touch "$PROJECT_DIR/logs/backend/.gitkeep"
 touch "$PROJECT_DIR/backend/src/deployment/kubernetes/.gitkeep"
 touch "$PROJECT_DIR/backend/src/deployment/inference/.gitkeep"
 touch "$PROJECT_DIR/backend/src/data-pipeline/dags/.gitkeep"
@@ -335,12 +384,12 @@ touch "$PROJECT_DIR/frontend/src/pages/.gitkeep"
 touch "$PROJECT_DIR/frontend/src/hooks/.gitkeep"
 touch "$PROJECT_DIR/frontend/src/utils/.gitkeep"
 touch "$PROJECT_DIR/frontend/src/assets/.gitkeep"
-touch "$PROJECT_DIR/frontend/logs/.gitkeep"
+touch "$PROJECT_DIR/logs/frontend/.gitkeep"
 touch "$PROJECT_DIR/tmp/.gitkeep"
 touch "$PROJECT_DIR/tmp/input-prompts/.gitkeep"
 touch "$PROJECT_DIR/knowledge-base/.gitkeep"
 touch "$PROJECT_DIR/orchestrator/src/knowledge/documents/.gitkeep"
-touch "$PROJECT_DIR/orchestrator/logs/.gitkeep"
+touch "$PROJECT_DIR/logs/orchestrator/.gitkeep"
 
 # create .gitignore
 cat > "$PROJECT_DIR/.gitignore" << 'EOF'
@@ -522,9 +571,9 @@ cython_debug/
 # PyPI
 .pypirc
 
-# Backend project-specific log and data paths
-/backend/logs/*
-!/backend/logs/.gitkeep
+# Central logs directory
+/logs/backend/*
+!/logs/backend/.gitkeep
 
 # Data files — track directory structure only, not actual data contents
 /backend/data/raw/*
@@ -555,9 +604,8 @@ frontend/yarn-error.log*
 frontend/.pnp/
 frontend/.pnp.js
 
-# Frontend logs
-/frontend/logs/*
-!/frontend/logs/.gitkeep
+/logs/frontend/*
+!/logs/frontend/.gitkeep
 
 # --- Orchestrator ---
 
@@ -569,9 +617,8 @@ orchestrator/**/*.egg-info/
 orchestrator/.pytest_cache/
 orchestrator/.ruff_cache/
 
-# Orchestrator logs
-/orchestrator/logs/*
-!/orchestrator/logs/.gitkeep
+/logs/orchestrator/*
+!/logs/orchestrator/.gitkeep
 
 # FAISS index files — persisted to Docker volume; never commit the index binary
 orchestrator/src/knowledge/documents/*.index
@@ -606,6 +653,7 @@ dependencies = [
     "uvicorn[standard]>=0.29.0",
     "python-dotenv>=1.0.0",
     "psycopg2-binary>=2.9.0",
+    "pytz>=2024.1",
 ]
 
 [project.scripts]
@@ -778,7 +826,7 @@ services:
       - app-network
     volumes:
       - ./backend/data:/app/data
-      - ./backend/logs:/app/logs
+      - ./logs/backend:/app/logs
 
   orchestrator:
     build:
@@ -800,7 +848,7 @@ services:
     networks:
       - app-network
     volumes:
-      - ./orchestrator/logs:/app/logs
+      - ./logs/orchestrator:/app/logs
       - faiss_data:/app/src/knowledge/documents
 
   frontend:
@@ -963,9 +1011,9 @@ seed-db:
 # ── Log management ───────────────────────────────────────────────────────────
 # Clear all log files across backend, frontend, and orchestrator
 clear-logs:
-    find backend/logs -type f -name "*.log" -delete
-    find frontend/logs -type f -name "*.log" -delete
-    find orchestrator/logs -type f -name "*.log" -delete
+    find logs/backend -type f -name "*.log" -delete
+    find logs/frontend -type f -name "*.log" -delete
+    find logs/orchestrator -type f -name "*.log" -delete
     @echo "All logs cleared."
 
 # ── Linting ──────────────────────────────────────────────────────────────────
@@ -1206,9 +1254,9 @@ TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
 
 echo "[hook] $TOOL_NAME completed at $TIMESTAMP" >&2
 
-# Example: append a log entry to backend/logs/claude_tool.log
-LOG_FILE="backend/logs/claude_tool.log"
-if [ -d "backend/logs" ]; then
+# Example: append a log entry to logs/claude_tool.log
+LOG_FILE="logs/claude_tool.log"
+if [ -d "logs" ]; then
   echo "$TIMESTAMP  tool=$TOOL_NAME  exit=$?" >> "$LOG_FILE"
 fi
 EOF
@@ -1426,6 +1474,7 @@ dependencies = [
     "httpx>=0.27.0",
     "psycopg2-binary>=2.9.0",
     "sqlalchemy>=2.0.0",
+    "pytz>=2024.1",
 ]
 
 [dependency-groups]
@@ -1589,6 +1638,53 @@ touch "$PROJECT_DIR"/orchestrator/src/memory/{__init__.py,base.py,cache.py,embed
 touch "$PROJECT_DIR"/orchestrator/src/tools/{__init__.py,base.py,web_search.py,calculator.py,file_reader.py,custom_tools.py}
 touch "$PROJECT_DIR"/orchestrator/src/llm/{__init__.py,client.py,token_counter.py}
 touch "$PROJECT_DIR"/orchestrator/src/utils/{__init__.py,logger.py,helpers.py,timers.py}
+
+# create orchestrator/src/utils/logger.py
+cat > "$PROJECT_DIR/orchestrator/src/utils/logger.py" << 'EOF'
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import pytz
+
+_LOGS_DIR = Path(__file__).parents[3] / "logs" / "orchestrator"
+
+
+def get_logger(name: str, log_file: str, log_level: int = logging.DEBUG) -> logging.Logger:
+    """Return a named logger writing to logs/orchestrator/YYYYMMDD/<log_file>.log and stdout."""
+    logger = logging.getLogger(name)
+    if logger.hasHandlers():
+        return logger
+
+    logger.setLevel(log_level)
+
+    tz = pytz.timezone("Asia/Dhaka")
+
+    def _converter(*args):
+        return datetime.now(tz).timetuple()
+
+    today = datetime.now(tz).strftime("%Y%m%d")
+    log_dir = _LOGS_DIR / today
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    fh = logging.FileHandler(log_dir / f"{log_file}.log")
+    fh.setLevel(logging.DEBUG)
+    fmt_fh = logging.Formatter("[ %(asctime)s ] %(name)-15s %(levelname)-8s %(message)s")
+    fmt_fh.converter = _converter
+    fh.setFormatter(fmt_fh)
+    logger.addHandler(fh)
+
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    fmt_ch = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+    fmt_ch.converter = _converter
+    ch.setFormatter(fmt_ch)
+    logger.addHandler(ch)
+
+    return logger
+EOF
+
 touch "$PROJECT_DIR"/shared/models/__init__.py
 touch "$PROJECT_DIR"/shared/interfaces/index.ts
 touch "$PROJECT_DIR"/tests/integration/__init__.py
@@ -1956,7 +2052,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - `tests/integration/` — E2E tests that spin up the full docker-compose stack
 - `backend/tests/` — Backend unit tests (pytest)
 - `backend/scripts/` — Standalone train/predict scripts
-- `frontend/logs/` — Frontend log files (not committed)
+- `backend/src/utils/logger.py` — get_logger() writing to logs/backend/YYYYMMDD/
+- `orchestrator/src/utils/logger.py` — get_logger() writing to logs/orchestrator/YYYYMMDD/
+- `logs/` — Centralised runtime logs: logs/backend/, logs/frontend/, logs/orchestrator/ (not committed)
 - `checkpoints/` — Saved model checkpoints (not committed; .gitkeep preserves the folder)
 - `tmp/` — Temporary scratch files (not committed)
 - `tmp/input-prompts/` — Temporary prompt drafts and experiments
