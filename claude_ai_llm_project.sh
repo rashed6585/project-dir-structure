@@ -1148,6 +1148,17 @@ cat > "$PROJECT_DIR/.claude/settings.json" << 'EOF'
             "command": "bash .claude/hooks/PostToolUse.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ruff-format.sh",
+            "timeout": 20,
+            "statusMessage": "Running ruff format..."
+          }
+        ]
       }
     ]
   }
@@ -1160,10 +1171,26 @@ cat > "$PROJECT_DIR/.claude/settings.local.json" << 'EOF'
   "permissions": {
     "allow": [
       "Bash(code *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)"
     ]
   },
-  "env": {
-    "CLAUDE_USER": "your-name"
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ruff-format.sh",
+            "timeout": 20,
+            "statusMessage": "Running ruff format..."
+          }
+        ]
+      }
+    ]
   }
 }
 EOF
@@ -1186,6 +1213,53 @@ if [ -d "backend/logs" ]; then
 fi
 EOF
 chmod +x "$PROJECT_DIR/.claude/hooks/PostToolUse.sh"
+
+# create .claude/hooks/ruff-format.sh
+cat > "$PROJECT_DIR/.claude/hooks/ruff-format.sh" << 'EOF'
+#!/usr/bin/env bash
+# PostToolUse hook: runs `ruff format` on any .py file Claude Code writes/edits.
+# Reads the tool-call JSON from stdin, extracts the file_path, and formats it
+# if it's a Python file and ruff is available.
+
+set -euo pipefail
+
+INPUT=$(cat)
+
+# file_path is present for Write/Edit/MultiEdit tool calls
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+
+# Nothing to do if there's no path or it's not a .py file
+if [[ -z "$FILE_PATH" || "$FILE_PATH" != *.py ]]; then
+  exit 0
+fi
+
+# Skip if the file doesn't actually exist (e.g. it was deleted)
+if [[ ! -f "$FILE_PATH" ]]; then
+  exit 0
+fi
+
+# Make sure ruff is on PATH; adjust this if you use a venv/poetry/uv
+if ! command -v ruff >/dev/null 2>&1; then
+  echo "ruff not found on PATH; skipping format for $FILE_PATH" >&2
+  exit 0
+fi
+
+# 1. Fix lint-only concerns first: import sorting ([tool.ruff.lint.isort])
+#    and any other auto-fixable lint rules. `ruff format` does NOT read
+#    [tool.ruff.lint] / [tool.ruff.lint.isort] / [tool.ruff.lint.pydocstyle]
+#    at all -- those only apply under `ruff check`.
+#    --fix only applies fixable rules; pydocstyle (D) rules have no
+#    autofix, so they'll still surface as diagnostics, not be silently
+#    "fixed" -- that's expected, not a bug.
+ruff check --fix --select I "$FILE_PATH" 2>&1 || true
+
+# 2. Apply actual code formatting ([tool.ruff.format]).
+#    Both commands independently discover the nearest pyproject.toml by
+#    walking up from $FILE_PATH, so backend/pyproject.toml (or any
+#    subproject config) is picked up correctly without extra flags.
+ruff format "$FILE_PATH"
+EOF
+chmod +x "$PROJECT_DIR/.claude/hooks/ruff-format.sh"
 
 # create .claude/rules/coding-conventions.md
 cat > "$PROJECT_DIR/.claude/rules/coding-conventions.md" << 'EOF'
@@ -1794,63 +1868,67 @@ cat > "$PROJECT_DIR/CLAUDE.md" << 'EOF'
 ## Overview
 <!-- Describe what this project does and its purpose -->
 
-## Backend — Package Management
-This project uses [uv](https://docs.astral.sh/uv/) for Python dependency management.
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-```bash
-cd backend
-uv sync                     # Install all dependencies (including dev)
-uv add <package>            # Add a runtime dependency
-uv add --dev <package>      # Add a dev dependency
-uv run pytest               # Run tests
-uv run ruff check .         # Lint
-uv run ruff format .        # Format
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
 ```
 
-## Frontend — Package Management
-This project uses **Node 20**, [Vite](https://vitejs.dev/), React, and [Tailwind CSS](https://tailwindcss.com/).
-Use `nvm` to switch to the correct Node version before working on the frontend.
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-```bash
-cd frontend
-nvm use                     # Switch to Node 20 (reads .nvmrc)
-npm install                 # Install all dependencies
-npm run dev                 # Start Vite dev server (http://localhost:5173)
-npm run build               # Production build → dist/
-npm test                    # Run Vitest tests
-npm run coverage            # Test coverage report
-npm run lint                # ESLint
-```
-
-## Orchestrator — Package Management
-The orchestrator uses [uv](https://docs.astral.sh/uv/) and exposes a FastAPI app on port 8001.
-
-```bash
-cd orchestrator
-uv sync
-cp .env.example .env        # fill in API keys and DB URIs
-uv run uvicorn src.main:app --reload
-```
-
-## Docker
-```bash
-docker compose up --build              # Start all services (backend, orchestrator, frontend, PostgreSQL, Redis)
-docker compose up --build orchestrator # Rebuild and start orchestrator only
-docker compose down -v                 # Stop all services and remove volumes
-```
-
-## Task Runner (justfile)
-Install [just](https://github.com/casey/just), then from the project root:
-```bash
-just install           # Install all deps (backend + orchestrator + frontend)
-just lint-all          # Lint all three projects simultaneously
-just test-all          # Run all unit tests across all projects
-just test-integration  # Run E2E tests against the full docker-compose stack
-just seed-db           # Seed the PostgreSQL database
-just clear-logs        # Clear all log files across all services
-just up                # Build and start all services
-just down              # Stop all services and remove volumes
-```
+---
 
 ## Project Structure
 - `backend/src/` — Python source code (data-pipeline, models, utils, evaluation, deployment)
