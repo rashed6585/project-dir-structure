@@ -1,0 +1,57 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(mkdir:*)",
+            "Bash(uv:*)",
+            "Bash(find:*)",
+            "Bash(mv:*)",
+            "Bash(grep:*)",
+            "Bash(npm:*)",
+            "Bash(ls:*)",
+            "Bash(cp:*)",
+            "Write",
+            "Edit",
+            "Bash(chmod:*)",
+            "Bash(touch:*)"
+        ],
+        "deny": [
+            "Read(./.env)",
+            "Read(./.env.*)"
+        ]
+    },
+    "hooks": {
+        "PostToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash .claude/hooks/PostToolUse.sh"
+                    }
+                ]
+            },
+            {
+                "matcher": "Write|Edit|MultiEdit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ruff-format.sh",
+                        "timeout": 20,
+                        "statusMessage": "Running ruff format..."
+                    }
+                ]
+            }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_use.py"
+                    }
+                ]
+            }
+        ]
+    }
+}
