@@ -22,11 +22,11 @@
     "hooks": {
         "PostToolUse": [
             {
-                "matcher": "Bash",
+                "matcher": "",
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "bash .claude/hooks/PostToolUse.sh"
+                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_use.py"
                     }
                 ]
             },
