@@ -35,9 +35,18 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ruff-format.sh",
-                        "timeout": 20,
+                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/validator/ruff_validator.py",
                         "statusMessage": "Running ruff format..."
+                    },
+                    {
+                        "type": "command",
+                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/validator/ty_validator.py",
+                        "statusMessage": "Running ty validator..."
+                    },
+                    {
+                        "type": "command",
+                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/validator/ts_lint.py",
+                        "statusMessage": "Running ESLint linter..."
                     }
                 ]
             }
@@ -49,6 +58,10 @@
                     {
                         "type": "command",
                         "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_use.py"
+                    },
+                    {
+                        "type": "command",
+                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/use_bun.py"
                     }
                 ]
             }
