@@ -19,6 +19,11 @@
             "Read(./.env.*)"
         ]
     },
+    "statusLine": {
+        "type": "command",
+        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/status_lines/status_line_v6.py",
+        "padding": 0
+    },
     "hooks": {
         "PostToolUse": [
             {
