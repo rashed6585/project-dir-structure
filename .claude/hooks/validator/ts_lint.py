@@ -1,4 +1,17 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S npx run-script
+
+# /// script
+# runtime = "node>=22"
+# packageManager = "npm"
+# dependencies = [
+#   "axios@^1.11.0",
+#   "chalk@^5.4.0"
+# ]
+# devDependencies = [
+#   "eslint",
+#   "@eslint/js"
+# ]
+# ///
 
 import json
 import sys
