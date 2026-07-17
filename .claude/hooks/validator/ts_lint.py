@@ -1,17 +1,4 @@
-#!/usr/bin/env -S npx run-script
-
-# /// script
-# runtime = "node>=22"
-# packageManager = "npm"
-# dependencies = [
-#   "axios@^1.11.0",
-#   "chalk@^5.4.0"
-# ]
-# devDependencies = [
-#   "eslint",
-#   "@eslint/js"
-# ]
-# ///
+#!/usr/bin/env python3
 
 import json
 import sys
@@ -54,7 +41,7 @@ def main():
                 # Ensure log directory exists
                 root_dir = Path(__file__).resolve().parents[3]
                 log_dir = root_dir / "logs"
-                log_dir.mkdir(parents=True, exist_ok=True)                
+                log_dir.mkdir(parents=True, exist_ok=True)
                 log_file = log_dir / "eslint_errors.json"
                 error_output = result.stdout or result.stderr
                 error_entry = {
@@ -98,5 +85,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
