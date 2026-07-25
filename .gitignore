@@ -1,0 +1,14 @@
+# Environment files — each developer keeps their own; never commit .env
+.env
+.env.local
+.env.*.local
+
+# Python byte-compiled / optimised / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+/logs
+!/logs/.gitkeep
