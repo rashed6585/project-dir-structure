@@ -9,6 +9,11 @@ __pycache__/
 *$py.class
 *.pyc
 *.pyo
+*.egg
+*.egg-info/
+.eggs/
+develop-eggs/
+uv.lock
 
 /logs
 !/logs/.gitkeep
