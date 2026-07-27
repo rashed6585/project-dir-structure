@@ -16,9 +16,18 @@
         ],
         "deny": [
             "Read(./.env)",
+<<<<<<< HEAD
             "Read(./.env.*)"
         ],
         "defaultMode": "default"
+=======
+            "Read(./.env.*)",
+            "Read(**/secrets/*)",
+            "Read(**/*credential*)",
+            "Read(**/*.pem)",
+            "Read(**/*.key)"
+        ]
+>>>>>>> 827b06d8fa5cf414ee58427d55e06f9e499f2d79
     },
     "statusLine": {
         "type": "command",
