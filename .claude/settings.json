@@ -17,7 +17,8 @@
         "deny": [
             "Read(./.env)",
             "Read(./.env.*)"
-        ]
+        ],
+        "defaultMode": "default"
     },
     "statusLine": {
         "type": "command",
