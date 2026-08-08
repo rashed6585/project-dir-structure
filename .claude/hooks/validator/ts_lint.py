@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
 
 import json
+import logging
 import sys
 import subprocess
 from pathlib import Path
+
+# Logging setup - log file next to this script
+root_dir = Path(__file__).resolve().parents[3]
+log_dir = root_dir / "logs"
+log_dir.mkdir(parents=True, exist_ok=True)
+LOG_FILE = log_dir / "ts_lint.log"
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.FileHandler(LOG_FILE, mode="a")],
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -12,7 +27,7 @@ def main():
         input_data = json.load(sys.stdin)
 
         tool_input = input_data.get("tool_input", {})
-        print(tool_input)
+        logger.debug(f"tool_input: {tool_input}")
 
         # Get file path from tool input
         file_path = tool_input.get("file_path")
@@ -52,7 +67,7 @@ def main():
 
                 # Load existing errors or create new list
                 if log_file.exists():
-                    with open(log_file, "r") as f:
+                    with open(log_file) as f:
                         errors = json.load(f)
                 else:
                     errors = []

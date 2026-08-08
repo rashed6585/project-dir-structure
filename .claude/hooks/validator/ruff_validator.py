@@ -3,8 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""
-Ruff Linter Validator for Claude Code PostToolUse Hook
+"""Ruff Linter Validator for Claude Code PostToolUse Hook.
 
 Runs `uvx ruff check` on individual Python files after Write operations.
 
@@ -59,6 +58,39 @@ def main():
         logger.info("Skipping non-Python file")
         print(json.dumps({}))
         return
+
+    # Run python3 AST syntax check on the single file
+    logger.info(f"Running: python3 -c AST check {file_path}")
+    try:
+        ast_result = subprocess.run(
+            [
+                "python3",
+                "-c",
+                "import ast, sys; ast.parse(open(sys.argv[1]).read()); print('AST OK')",
+                file_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        logger.info(f"AST check exit code: {ast_result.returncode}")
+        if ast_result.stdout.strip():
+            logger.info(f"  {ast_result.stdout.strip()}")
+
+        if ast_result.returncode != 0:
+            logger.info("RESULT: BLOCK (AST syntax check failed)")
+            error_output = ast_result.stderr.strip() or "AST syntax check failed"
+            print(
+                json.dumps(
+                    {
+                        "decision": "block",
+                        "reason": f"Syntax error:\n{error_output[:500]}",
+                    }
+                )
+            )
+            return
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logger.info(f"AST check skipped: {type(e).__name__}")
 
     # Run uvx ruff format on the single file
     logger.info(f"Running: uvx ruff format {file_path}")
