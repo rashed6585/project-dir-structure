@@ -1,7 +1,8 @@
 # Coding Conventions
 
 ## Python Style
-- Follow PEP 8; enforced by ruff (line length 100, Google docstring style)
+- Follow PEP 8; enforced by ruff (line length 120)
+- Docstrings: omit by default. Add only a one-line docstring when the input/output or behavior isn't obvious from the signature — no Args/Returns/Raises sections. If a docstring is present, ruff enforces Google convention formatting on it (`pydocstyle` D-rules), so keep it to one line to stay compliant with minimal effort.
 - Use type hints on all public functions
 - Prefer `pathlib.Path` over `os.path` for file operations
 
