@@ -559,8 +559,8 @@ dmypy.json
 .pytype/
 
 # Claude
-.claude/
-CLAUDE.md
+!.claude/
+!CLAUDE.md
 
 # Cython debug symbols
 cython_debug/
@@ -625,7 +625,7 @@ orchestrator/src/knowledge/documents/*.index
 orchestrator/src/knowledge/documents/*.npy
 
 # --- Claude Code ---
-
+/logs/*
 # Claude Code local overrides (personal settings, not team-shared)
 .claude/settings.local.json
 EOF
