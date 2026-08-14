@@ -16,7 +16,7 @@ import pytz
 def is_dangerous_rm_command(command):
     """Comprehensive detection of dangerous rm commands.
     Matches various forms of rm -rf and similar destructive patterns.
-    """
+    """  # noqa: D205
     # Normalize command by removing extra spaces and converting to lowercase
     normalized = " ".join(command.lower().split())
 

@@ -20,7 +20,8 @@
             "Read(**/secrets/*)",
             "Read(**/*credential*)",
             "Read(**/*.pem)",
-            "Read(**/*.key)"
+            "Read(**/*.key)",
+            "Read(**/*.crt)"
         ],
         "defaultMode": "default"
     },

@@ -12,13 +12,13 @@ def main():
     try:
         # Read JSON input from stdin
         input_data = json.load(sys.stdin)
-        
+
         # Ensure log directory exists
         root_dir = Path(__file__).resolve().parents[2]
         log_dir = root_dir / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / 'post_tool_use.json'
-        
+
         # Read existing log data or initialize empty list
         if log_path.exists():
             with open(log_path, 'r') as f:
@@ -28,16 +28,16 @@ def main():
                     log_data = []
         else:
             log_data = []
-        
+
         # Append new data
         log_data.append(input_data)
-        
+
         # Write back to file with formatting
         with open(log_path, 'w') as f:
             json.dump(log_data, f, indent=2)
-        
+
         sys.exit(0)
-        
+
     except json.JSONDecodeError:
         # Handle JSON decode errors gracefully
         sys.exit(0)
